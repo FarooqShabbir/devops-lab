@@ -1,18 +1,22 @@
 name: CD - Deploy to Lab Host
 
-# Deploys by SSHing into the EC2 box, pulling the new images from GHCR, and
-# rolling docker compose. Triggered manually (safer for a lab/thesis
-# environment than auto-deploy on every push) — change to
+# Deploys by SSHing into the EC2 box, pulling latest source, and rebuilding
+# the Compose stack locally on the box. Triggered manually (safer for a
+# lab/thesis environment than auto-deploy on every push) — change to
 # `workflow_run: {workflows: ["CI - Build, Test, Push"], types: [completed]}`
 # once you trust the pipeline enough to go fully hands-off.
+#
+# NOTE: this builds images from source on the target box rather than pulling
+# prebuilt images from GHCR. ci.yml does push images to GHCR (useful as a
+# build cache / for scanning / for other consumers), but docker-compose.yml
+# is written with local `build:` blocks, not registry image references, so
+# `docker compose pull` has nothing to pull. Rebuilding server-side is slower
+# per deploy but matches how this stack has actually been run and tested —
+# switching to registry-pull deploys is a valid future improvement, not a
+# correctness requirement right now.
 
 on:
-  workflow_dispatch:
-    inputs:
-      image_tag:
-        description: "Image tag to deploy (default: latest)"
-        required: false
-        default: "latest"
+  workflow_dispatch: {}
 
 jobs:
   deploy:
@@ -24,29 +28,25 @@ jobs:
         env:
           SSH_PRIVATE_KEY: ${{ secrets.LAB_SSH_PRIVATE_KEY }}
           LAB_HOST: ${{ secrets.LAB_HOST_IP }}
-          IMAGE_TAG: ${{ github.event.inputs.image_tag }}
         run: |
           mkdir -p ~/.ssh
           echo "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -H "$LAB_HOST" >> ~/.ssh/known_hosts
 
-          ssh -i ~/.ssh/deploy_key ubuntu@"$LAB_HOST" bash -s <<EOF
+          ssh -i ~/.ssh/deploy_key ubuntu@"$LAB_HOST" bash -s <<'INNEREOF'
             set -euo pipefail
             cd /opt/devops-lab
             git pull origin main
-            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
-            export IMAGE_TAG="$IMAGE_TAG"
-            docker compose pull
-            docker compose up -d --remove-orphans
+            docker compose up -d --build --remove-orphans
             docker image prune -f
-          EOF
+          INNEREOF
 
       - name: Smoke test
         env:
           LAB_HOST: ${{ secrets.LAB_HOST_IP }}
         run: |
-          sleep 10
+          sleep 15
           curl -fsk "https://$LAB_HOST/python/health" || (echo "python route failed" && exit 1)
           curl -fsk "https://$LAB_HOST/node/health"   || (echo "node route failed" && exit 1)
           curl -fsk "https://$LAB_HOST/java/health"   || (echo "java route failed" && exit 1)
