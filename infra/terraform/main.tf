@@ -57,7 +57,7 @@ resource "aws_instance" "lab_host" {
     volume_type           = "gp3"
     volume_size           = 29
     delete_on_termination = true
-    encrypted              = true
+    encrypted             = true
   }
 
   user_data = file("${path.module}/../ansible/bootstrap.sh")
