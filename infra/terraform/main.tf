@@ -62,6 +62,17 @@ resource "aws_instance" "lab_host" {
 
   user_data = file("${path.module}/../ansible/bootstrap.sh")
 
+  # `data.aws_ami.ubuntu_2204` re-resolves "most recent" on every plan/apply.
+  # Without this, an unrelated change (e.g. bumping instance_type) can
+  # coincide with Canonical publishing a new AMI build and silently force a
+  # full replace — destroying the disk, not just resizing. AMI upgrades
+  # should be a deliberate action, not a side effect. To intentionally move
+  # to a newer AMI later: remove this ignore_changes temporarily, plan,
+  # confirm it's the only change, apply, then re-add it.
+  lifecycle {
+    ignore_changes = [ami]
+  }
+
   tags = {
     Name    = "${var.project_name}-host"
     Project = var.project_name
