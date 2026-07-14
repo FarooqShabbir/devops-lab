@@ -1,15 +1,15 @@
 # --- build stage ---
 FROM node:20-slim AS builder
 WORKDIR /build
-COPY package.json .
+COPY apps/node-app/package.json .
 RUN npm install --omit=dev --package-lock=false
 
 # --- runtime stage ---
 FROM node:20-slim
 WORKDIR /app
 COPY --from=builder /build/node_modules ./node_modules
-COPY server.js .
-COPY package.json .
+COPY apps/node-app/server.js .
+COPY apps/node-app/package.json .
 ENV NODE_ENV=production APP_ENV=production PORT=3000
 USER node
 EXPOSE 3000

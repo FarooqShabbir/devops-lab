@@ -1,7 +1,7 @@
 # --- build stage ---
 FROM python:3.12-slim AS builder
 WORKDIR /build
-COPY requirements.txt .
+COPY apps/python-app/requirements.txt .
 RUN pip install --no-cache-dir --user -r requirements.txt
 
 # --- runtime stage ---
@@ -9,7 +9,7 @@ FROM python:3.12-slim
 WORKDIR /app
 RUN useradd --create-home --shell /bin/bash appuser
 COPY --from=builder /root/.local /home/appuser/.local
-COPY main.py .
+COPY apps/python-app/main.py .
 ENV PATH=/home/appuser/.local/bin:$PATH \
     PYTHONUNBUFFERED=1 \
     APP_ENV=production
