@@ -24,16 +24,70 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Get runner's public IP
+        id: runner_ip
+        run: echo "ip=$(curl -s https://checkip.amazonaws.com)/32" >> "$GITHUB_OUTPUT"
+
+      - name: Temporarily allow this runner's IP for SSH
+        env:
+          SG_ID: ${{ secrets.LAB_SECURITY_GROUP_ID }}
+          RUNNER_CIDR: ${{ steps.runner_ip.outputs.ip }}
+        run: |
+          aws ec2 authorize-security-group-ingress \
+            --group-id "$SG_ID" \
+            --protocol tcp --port 22 --cidr "$RUNNER_CIDR" \
+            --tag-specifications "ResourceType=security-group-rule,Tags=[{Key=purpose,Value=temp-cd-runner-access}]"
+
       - name: Deploy over SSH
         env:
           SSH_PRIVATE_KEY: ${{ secrets.LAB_SSH_PRIVATE_KEY }}
           LAB_HOST: ${{ secrets.LAB_HOST_IP }}
         run: |
+          set -euxo pipefail
+
+          if [ -z "$LAB_HOST" ]; then
+            echo "::error::LAB_HOST_IP secret is empty or not set."
+            exit 1
+          fi
+          if [ -z "$SSH_PRIVATE_KEY" ]; then
+            echo "::error::LAB_SSH_PRIVATE_KEY secret is empty or not set."
+            exit 1
+          fi
+
           mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
           echo "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -H "$LAB_HOST" >> ~/.ssh/known_hosts
 
+          echo "Testing key format..."
+          ssh-keygen -y -f ~/.ssh/deploy_key > /dev/null || {
+            echo "::error::LAB_SSH_PRIVATE_KEY is not a valid private key. Check the secret was pasted in full, including BEGIN/END lines, with no extra encoding."
+            exit 1
+          }
+
+          echo "Scanning host key for $LAB_HOST..."
+          touch ~/.ssh/known_hosts
+          # retry a few times: the SG rule above can take a couple seconds to propagate
+          for i in 1 2 3 4 5; do
+            ssh-keyscan -H "$LAB_HOST" >> ~/.ssh/known_hosts 2>&1 && break
+            echo "ssh-keyscan attempt $i failed, retrying in 3s..."
+            sleep 3
+          done
+
+          echo "Testing SSH connectivity..."
+          ssh -i ~/.ssh/deploy_key -o ConnectTimeout=10 -o BatchMode=yes ubuntu@"$LAB_HOST" "echo SSH connection OK" || {
+            echo "::error::SSH connection failed. Common causes: wrong IP, the security group rule not yet propagated, or the public key on the box doesn't match this private key."
+            exit 1
+          }
+
+          echo "Running remote deploy script..."
           ssh -i ~/.ssh/deploy_key ubuntu@"$LAB_HOST" bash -s <<'INNEREOF'
             set -euo pipefail
             cd /opt/devops-lab
@@ -51,3 +105,13 @@ jobs:
           curl -fsk "https://$LAB_HOST/node/health"   || (echo "node route failed" && exit 1)
           curl -fsk "https://$LAB_HOST/java/health"   || (echo "java route failed" && exit 1)
           echo "All three routes healthy."
+
+      - name: Revoke this runner's temporary SSH access
+        if: always()
+        env:
+          SG_ID: ${{ secrets.LAB_SECURITY_GROUP_ID }}
+          RUNNER_CIDR: ${{ steps.runner_ip.outputs.ip }}
+        run: |
+          aws ec2 revoke-security-group-ingress \
+            --group-id "$SG_ID" \
+            --protocol tcp --port 22 --cidr "$RUNNER_CIDR" || true
