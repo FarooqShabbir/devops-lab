@@ -36,7 +36,14 @@ jobs:
         run: |
           curl -sLO https://github.com/yannh/kubeconform/releases/latest/download/kubeconform-linux-amd64.tar.gz
           tar xzf kubeconform-linux-amd64.tar.gz
-          ./kubeconform -summary -kubernetes-version 1.30.0 k8s/base/*.yaml
+          # kustomization.yaml is a Kustomize config, not a K8s API resource,
+          # so it has no schema for kubeconform to check directly. Build the
+          # real rendered manifests via kustomize (this also validates the
+          # kustomization.yaml itself, since a bad one fails the build step)
+          # and validate that output instead — closer to what actually gets
+          # applied to the cluster anyway.
+          kubectl kustomize k8s/base/ > /tmp/rendered.yaml
+          ./kubeconform -summary -kubernetes-version 1.30.0 /tmp/rendered.yaml
 
   # ---------------- Test each app in isolation ----------------
   test-python:
