@@ -1,0 +1,73 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: node-app
+  namespace: devops-lab
+  labels: { app: node-app, stack: node }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: node-app }
+  template:
+    metadata:
+      labels: { app: node-app, stack: node }
+    spec:
+      containers:
+        - name: node-app
+          image: devops-lab/node-app:local
+          imagePullPolicy: IfNotPresent
+          ports: [{ containerPort: 3000 }]
+          env:
+            - { name: APP_ENV, value: "production" }
+          resources:
+            requests: { cpu: "50m", memory: "64Mi" }
+            limits:   { cpu: "250m", memory: "128Mi" }
+          readinessProbe:
+            httpGet: { path: /health, port: 3000 }
+            initialDelaySeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: node-app-svc
+  namespace: devops-lab
+spec:
+  selector: { app: node-app }
+  ports:
+    - { port: 3000, targetPort: 3000 }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: apache-node
+  namespace: devops-lab
+  labels: { app: apache-node, role: app-server }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: apache-node }
+  template:
+    metadata:
+      labels: { app: apache-node, role: app-server }
+    spec:
+      containers:
+        - name: apache-node
+          image: devops-lab/apache-node:local
+          imagePullPolicy: IfNotPresent
+          ports: [{ containerPort: 80 }]
+          resources:
+            requests: { cpu: "25m", memory: "32Mi" }
+            limits:   { cpu: "100m", memory: "64Mi" }
+          readinessProbe:
+            httpGet: { path: /health, port: 80 }
+            initialDelaySeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: apache-node-svc
+  namespace: devops-lab
+spec:
+  selector: { app: apache-node }
+  ports:
+    - { port: 80, targetPort: 80 }

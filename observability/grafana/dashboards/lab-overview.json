@@ -1,0 +1,70 @@
+{
+  "title": "DevOps Lab Overview",
+  "uid": "devops-lab-overview",
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10s",
+  "panels": [
+    {
+      "id": 1,
+      "title": "Request Rate by App (req/s)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "expr": "sum by (job) (rate(app_requests_total[1m]))",
+          "legendFormat": "{{job}}"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "P95 Latency by App (s)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, job) (rate(app_request_latency_seconds_bucket[5m])))",
+          "legendFormat": "{{job}} p95"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Container CPU Usage",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "targets": [
+        {
+          "expr": "sum by (name) (rate(container_cpu_usage_seconds_total{name=~\"python-app|node-app|tomcat-java|edge-nginx|apache-node|nginx-python\"}[1m]))",
+          "legendFormat": "{{name}}"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Container Memory Usage (bytes)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "targets": [
+        {
+          "expr": "container_memory_usage_bytes{name=~\"python-app|node-app|tomcat-java|edge-nginx|apache-node|nginx-python\"}",
+          "legendFormat": "{{name}}"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "HTTP Status Codes (rate)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 16 },
+      "targets": [
+        {
+          "expr": "sum by (status) (rate(app_requests_total[1m]))",
+          "legendFormat": "{{status}}"
+        }
+      ]
+    }
+  ]
+}

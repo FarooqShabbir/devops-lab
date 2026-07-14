@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Tomcat server.xml for the Java app server (apps/java-app deployed as ROOT.war).
+  This is the "Tomcat" server referenced in the lab's per-server deployment task.
+  Trimmed to essentials: HTTP connector tuned for small instance, AJP disabled
+  (not needed since edge Nginx talks HTTP), access logging enabled for observability.
+-->
+<Server port="8005" shutdown="SHUTDOWN">
+  <Listener className="org.apache.catalina.startup.VersionLoggerListener" />
+  <Listener className="org.apache.catalina.core.AprLifecycleListener" SSLEngine="off" />
+  <Listener className="org.apache.catalina.core.JreMemoryLeakPreventionListener" />
+  <Listener className="org.apache.catalina.mbeans.GlobalResourcesLifecycleListener" />
+  <Listener className="org.apache.catalina.core.ThreadLocalLeakPreventionListener" />
+
+  <GlobalNamingResources>
+    <Resource name="UserDatabase" auth="Container"
+              type="org.apache.catalina.UserDatabase"
+              description="User database that can be updated and saved"
+              factory="org.apache.catalina.users.MemoryUserDatabaseFactory"
+              pathname="conf/tomcat-users.xml" />
+  </GlobalNamingResources>
+
+  <Service name="Catalina">
+
+    <!-- Tuned for t3.micro-class instance: modest thread pool, no AJP -->
+    <Connector port="8080" protocol="HTTP/1.1"
+               connectionTimeout="20000"
+               maxThreads="50"
+               minSpareThreads="5"
+               acceptCount="50"
+               enableLookups="false"
+               redirectPort="8443"
+               server="AppServer" />
+
+    <Engine name="Catalina" defaultHost="localhost">
+
+      <Realm className="org.apache.catalina.realm.LockOutRealm">
+        <Realm className="org.apache.catalina.realm.UserDatabaseRealm"
+               resourceName="UserDatabase"/>
+      </Realm>
+
+      <Host name="localhost" appBase="webapps"
+            unpackWARs="true" autoDeploy="true">
+
+        <!-- Access log feeding observability/promtail -> Loki -->
+        <Valve className="org.apache.catalina.valves.AccessLogValve"
+               directory="logs"
+               prefix="tomcat_access_log" suffix=".log"
+               pattern="%h %l %u %t &quot;%r&quot; %s %b %D" />
+
+        <!-- Remote IP valve: trust the edge Nginx proxy for X-Forwarded-* headers -->
+        <Valve className="org.apache.catalina.valves.RemoteIpValve"
+               internalProxies="172\.\d+\.\d+\.\d+|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+"
+               remoteIpHeader="X-Forwarded-For"
+               protocolHeader="X-Forwarded-Proto" />
+
+      </Host>
+    </Engine>
+  </Service>
+</Server>

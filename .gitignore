@@ -1,0 +1,28 @@
+# Terraform
+infra/terraform/.terraform/
+infra/terraform/*.tfstate
+infra/terraform/*.tfstate.*
+infra/terraform/terraform.tfvars
+infra/terraform/.terraform.lock.hcl
+infra/terraform/crash.log
+
+# Java
+apps/java-app/target/
+
+# Node
+apps/node-app/node_modules/
+
+# Python
+apps/python-app/__pycache__/
+apps/python-app/*.pyc
+
+# TLS material generated at runtime (never commit real certs)
+edge/nginx-edge/ssl/*.pem
+
+# Editor/OS
+.DS_Store
+.vscode/
+*.swp
+
+# Logs
+*.log

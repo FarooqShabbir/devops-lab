@@ -1,0 +1,161 @@
+version: "3.9"
+
+# Full stack for local dev / live demo. See README.md for the "what runs
+# where" breakdown between this file and k8s/ (Minikube manifests).
+
+networks:
+  lab-net:
+    driver: bridge
+
+volumes:
+  prometheus-data:
+  grafana-data:
+  loki-data:
+
+services:
+
+  # ---------------- Apps ----------------
+
+  python-app:
+    build:
+      context: .
+      dockerfile: apps/python-app/Dockerfile
+    image: devops-lab/python-app:local
+    container_name: python-app
+    environment:
+      - APP_ENV=production
+    networks: [lab-net]
+    restart: unless-stopped
+
+  node-app:
+    build:
+      context: .
+      dockerfile: apps/node-app/Dockerfile
+    image: devops-lab/node-app:local
+    container_name: node-app
+    environment:
+      - APP_ENV=production
+    networks: [lab-net]
+    restart: unless-stopped
+
+  # java-app's Dockerfile builds the WAR AND becomes the Tomcat server itself
+  # (see apps/java-app/Dockerfile) — this one image satisfies both
+  # "deploy a Java app" and "deploy an app on Tomcat".
+  tomcat-java:
+    build:
+      context: .
+      dockerfile: apps/java-app/Dockerfile
+    image: devops-lab/tomcat-java:local
+    container_name: tomcat-java
+    environment:
+      - APP_ENV=production
+    networks: [lab-net]
+    restart: unless-stopped
+
+  # ---------------- App servers (fronting python & node) ----------------
+
+  nginx-python:
+    build:
+      context: .
+      dockerfile: servers/nginx-python/Dockerfile
+    image: devops-lab/nginx-python:local
+    container_name: nginx-python
+    depends_on: [python-app]
+    networks: [lab-net]
+    restart: unless-stopped
+
+  apache-node:
+    build:
+      context: .
+      dockerfile: servers/apache-node/Dockerfile
+    image: devops-lab/apache-node:local
+    container_name: apache-node
+    depends_on: [node-app]
+    networks: [lab-net]
+    restart: unless-stopped
+
+  # ---------------- Edge Nginx: reverse proxy, forward proxy, vhosts, SSL, routing ----------------
+
+  edge-nginx:
+    build:
+      context: .
+      dockerfile: edge/nginx-edge/Dockerfile
+    image: devops-lab/edge-nginx:local
+    container_name: edge-nginx
+    depends_on: [nginx-python, apache-node, tomcat-java]
+    ports:
+      - "80:80"       # HTTP (redirects to HTTPS)
+      - "443:443"     # HTTPS, vhosts + URL routing
+      - "8888:8888"   # Forward proxy listener
+    networks: [lab-net]
+    restart: unless-stopped
+
+  # ---------------- Observability ----------------
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: prometheus
+    volumes:
+      - ./observability/prometheus:/etc/prometheus:ro
+      - prometheus-data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.retention.time=7d"
+    ports:
+      - "9090:9090"
+    networks: [lab-net]
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    container_name: grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "3001:3000"
+    depends_on: [prometheus]
+    networks: [lab-net]
+    restart: unless-stopped
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    container_name: cadvisor
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    ports:
+      - "8081:8080"
+    networks: [lab-net]
+    restart: unless-stopped
+
+  loki:
+    image: grafana/loki:3.1.0
+    container_name: loki
+    volumes:
+      - ./observability/loki/loki-config.yml:/etc/loki/local-config.yaml:ro
+      - loki-data:/loki
+    command: -config.file=/etc/loki/local-config.yaml
+    ports:
+      - "3100:3100"
+    networks: [lab-net]
+    restart: unless-stopped
+
+  promtail:
+    image: grafana/promtail:3.1.0
+    container_name: promtail
+    volumes:
+      - ./observability/promtail/promtail-config.yml:/etc/promtail/config.yml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    command: -config.file=/etc/promtail/config.yml
+    depends_on: [loki]
+    networks: [lab-net]
+    restart: unless-stopped

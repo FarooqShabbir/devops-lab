@@ -1,0 +1,42 @@
+# K8s-native alternative/complement to edge-nginx's own routing config.
+# This demonstrates URL-based routing expressed as a Kubernetes Ingress
+# resource (the "Kubernetes way"), on top of the ingress-nginx controller
+# that ships with `minikube addons enable ingress`.
+#
+# Both this AND edge-nginx's conf.d/10-main-domain.conf implement the same
+# routing concept at two different layers — Ingress is what a K8s-native
+# reviewer will expect to see; edge-nginx's config is what satisfies "do it
+# in raw Nginx config" for the lab's explicit Nginx bullet list. Use
+# `minikube addons enable ingress` before applying this file.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: lab-ingress
+  namespace: devops-lab
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"  # TLS handled by edge-nginx path; keep ingress-nginx simple for the lab
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: lab.local
+      http:
+        paths:
+          - path: /python(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: nginx-python-svc
+                port: { number: 80 }
+          - path: /node(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: apache-node-svc
+                port: { number: 80 }
+          - path: /java(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: tomcat-java-svc
+                port: { number: 8080 }

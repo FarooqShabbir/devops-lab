@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tomcat-java
+  namespace: devops-lab
+  labels: { app: tomcat-java, stack: java, role: app-server }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: tomcat-java }
+  template:
+    metadata:
+      labels: { app: tomcat-java, stack: java, role: app-server }
+    spec:
+      containers:
+        - name: tomcat-java
+          image: devops-lab/tomcat-java:local
+          imagePullPolicy: IfNotPresent
+          ports: [{ containerPort: 8080 }]
+          env:
+            - { name: APP_ENV, value: "production" }
+          # JVM + Tomcat is the heaviest of the three; give it the most headroom
+          # but still cap it so it can't starve the other pods on a 1-2GB node.
+          resources:
+            requests: { cpu: "100m", memory: "192Mi" }
+            limits:   { cpu: "500m", memory: "384Mi" }
+          readinessProbe:
+            httpGet: { path: /health, port: 8080 }
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /health, port: 8080 }
+            initialDelaySeconds: 30
+            periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tomcat-java-svc
+  namespace: devops-lab
+spec:
+  selector: { app: tomcat-java }
+  ports:
+    - { port: 8080, targetPort: 8080 }

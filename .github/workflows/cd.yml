@@ -1,0 +1,53 @@
+name: CD - Deploy to Lab Host
+
+# Deploys by SSHing into the EC2 box, pulling the new images from GHCR, and
+# rolling docker compose. Triggered manually (safer for a lab/thesis
+# environment than auto-deploy on every push) — change to
+# `workflow_run: {workflows: ["CI - Build, Test, Push"], types: [completed]}`
+# once you trust the pipeline enough to go fully hands-off.
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Image tag to deploy (default: latest)"
+        required: false
+        default: "latest"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy over SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.LAB_SSH_PRIVATE_KEY }}
+          LAB_HOST: ${{ secrets.LAB_HOST_IP }}
+          IMAGE_TAG: ${{ github.event.inputs.image_tag }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "$LAB_HOST" >> ~/.ssh/known_hosts
+
+          ssh -i ~/.ssh/deploy_key ubuntu@"$LAB_HOST" bash -s <<EOF
+            set -euo pipefail
+            cd /opt/devops-lab
+            git pull origin main
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+            export IMAGE_TAG="$IMAGE_TAG"
+            docker compose pull
+            docker compose up -d --remove-orphans
+            docker image prune -f
+          EOF
+
+      - name: Smoke test
+        env:
+          LAB_HOST: ${{ secrets.LAB_HOST_IP }}
+        run: |
+          sleep 10
+          curl -fsk "https://$LAB_HOST/python/health" || (echo "python route failed" && exit 1)
+          curl -fsk "https://$LAB_HOST/node/health"   || (echo "node route failed" && exit 1)
+          curl -fsk "https://$LAB_HOST/java/health"   || (echo "java route failed" && exit 1)
+          echo "All three routes healthy."

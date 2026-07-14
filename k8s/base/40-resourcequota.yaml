@@ -1,0 +1,16 @@
+# Guardrail for the free-tier / RAM-constrained Minikube node. Without this,
+# it's easy to accidentally schedule more than the box can hold and get
+# silent evictions. Sum of the limits above: python ~128Mi, node ~128Mi,
+# java ~384Mi, edge ~96Mi = ~736Mi, comfortably under a 1.5-2GB Minikube VM.
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: devops-lab-quota
+  namespace: devops-lab
+spec:
+  hard:
+    requests.cpu: "1"
+    requests.memory: 768Mi
+    limits.cpu: "2"
+    limits.memory: 1200Mi
+    pods: "10"

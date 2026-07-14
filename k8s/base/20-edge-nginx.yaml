@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: edge-nginx
+  namespace: devops-lab
+  labels: { app: edge-nginx, role: edge }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: edge-nginx }
+  template:
+    metadata:
+      labels: { app: edge-nginx, role: edge }
+    spec:
+      containers:
+        - name: edge-nginx
+          image: devops-lab/edge-nginx:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - { containerPort: 80,  name: http }
+            - { containerPort: 443, name: https }
+            - { containerPort: 8888, name: fwdproxy }
+          resources:
+            requests: { cpu: "50m", memory: "48Mi" }
+            limits:   { cpu: "200m", memory: "96Mi" }
+          readinessProbe:
+            httpGet: { path: /edge-health, port: 80 }
+            initialDelaySeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: edge-nginx-svc
+  namespace: devops-lab
+spec:
+  type: NodePort
+  selector: { app: edge-nginx }
+  ports:
+    - { name: http,  port: 80,  targetPort: 80,  nodePort: 30080 }
+    - { name: https, port: 443, targetPort: 443, nodePort: 30443 }
+    - { name: fwdproxy, port: 8888, targetPort: 8888, nodePort: 30888 }
