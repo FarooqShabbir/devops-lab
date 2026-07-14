@@ -36,7 +36,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: tomcat-java-svc
+  name: tomcat-java
   namespace: devops-lab
 spec:
   selector: { app: tomcat-java }

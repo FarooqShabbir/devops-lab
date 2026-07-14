@@ -29,7 +29,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: node-app-svc
+  name: node-app
   namespace: devops-lab
 spec:
   selector: { app: node-app }
@@ -65,7 +65,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: apache-node-svc
+  name: apache-node
   namespace: devops-lab
 spec:
   selector: { app: apache-node }

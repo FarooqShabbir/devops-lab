@@ -26,17 +26,17 @@ spec:
             pathType: ImplementationSpecific
             backend:
               service:
-                name: nginx-python-svc
+                name: nginx-python
                 port: { number: 80 }
           - path: /node(/|$)(.*)
             pathType: ImplementationSpecific
             backend:
               service:
-                name: apache-node-svc
+                name: apache-node
                 port: { number: 80 }
           - path: /java(/|$)(.*)
             pathType: ImplementationSpecific
             backend:
               service:
-                name: tomcat-java-svc
+                name: tomcat-java
                 port: { number: 8080 }

@@ -30,7 +30,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: edge-nginx-svc
+  name: edge-nginx
   namespace: devops-lab
 spec:
   type: NodePort

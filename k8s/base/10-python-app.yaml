@@ -34,7 +34,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: python-app-svc
+  name: python-app
   namespace: devops-lab
 spec:
   selector: { app: python-app }
@@ -70,7 +70,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: nginx-python-svc
+  name: nginx-python
   namespace: devops-lab
 spec:
   selector: { app: nginx-python }
