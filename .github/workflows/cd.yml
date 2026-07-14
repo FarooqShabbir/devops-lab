@@ -42,8 +42,7 @@ jobs:
         run: |
           aws ec2 authorize-security-group-ingress \
             --group-id "$SG_ID" \
-            --protocol tcp --port 22 --cidr "$RUNNER_CIDR" \
-            --tag-specifications "ResourceType=security-group-rule,Tags=[{Key=purpose,Value=temp-cd-runner-access}]"
+            --protocol tcp --port 22 --cidr "$RUNNER_CIDR"
 
       - name: Deploy over SSH
         env:
